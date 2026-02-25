@@ -17,7 +17,7 @@ const Bronlar = () => {
   const [isCheckInDialogOpen, setIsCheckInDialogOpen] = useState(false);
   const [isReserveDialogOpen, setIsReserveDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
-    guest_id: '',
+    guest_ids: [],
     room_id: '',
     check_in_date: '',
     check_out_date: ''
@@ -45,7 +45,10 @@ const Bronlar = () => {
   const handleCheckIn = async (e) => {
     e.preventDefault();
     try {
-      await api.post(`${API}/bookings`, formData);
+      // Create booking (Confirmed status) then immediately check in
+      const bookingRes = await api.post(`${API}/bookings`, formData);
+      const newBooking = bookingRes.data;
+      await api.post(`${API}/bookings/${newBooking.id}/checkin`);
       toast.success('Check-in muvaffaqiyatli!');
       fetchData();
       resetForm();
@@ -58,7 +61,8 @@ const Bronlar = () => {
   const handleReservation = async (e) => {
     e.preventDefault();
     try {
-      await api.post(`${API}/bookings/reserve`, formData);
+      // Backend endpoint is /bookings (creates with Confirmed status = reservation)
+      await api.post(`${API}/bookings`, formData);
       toast.success('Bron muvaffaqiyatli yaratildi!');
       fetchData();
       resetForm();
@@ -71,8 +75,9 @@ const Bronlar = () => {
   const handleCheckOut = async (bookingId) => {
     if (window.confirm('Check-outni tasdiqlaysizmi?')) {
       try {
-        const response = await api.put(`${API}/bookings/${bookingId}/checkout`);
-        toast.success(`Check-out successful! Total: ${formatCurrency(response.data.total_price)}`);
+        // Backend uses POST for checkout, not PUT
+        const response = await api.post(`${API}/bookings/${bookingId}/checkout`);
+        toast.success(`Check-out muvaffaqiyatli! Jami: ${formatCurrency(response.data.total_price)}`);
         fetchData();
       } catch (error) {
         toast.error('Check-out bajarilmadi');
@@ -82,7 +87,7 @@ const Bronlar = () => {
 
   const resetForm = () => {
     setFormData({
-      guest_id: '',
+      guest_ids: [],
       room_id: '',
       check_in_date: '',
       check_out_date: ''
@@ -90,19 +95,30 @@ const Bronlar = () => {
   };
 
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('uz-UZ', { 
+    return new Intl.NumberFormat('uz-UZ', {
       minimumFractionDigits: 0,
-      maximumFractionDigits: 0 
+      maximumFractionDigits: 0
     }).format(amount).replace(/,/g, ' ') + ' UZS';
   };
 
   const getStatusBadge = (status) => {
     const badges = {
-      active: 'bg-emerald-50 text-emerald-700 ring-emerald-600/20',
-      reserved: 'bg-blue-50 text-blue-700 ring-blue-600/20',
-      completed: 'bg-slate-50 text-slate-600 ring-slate-500/10'
+      'Confirmed': 'bg-blue-50 text-blue-700 ring-blue-600/20',
+      'Checked In': 'bg-emerald-50 text-emerald-700 ring-emerald-600/20',
+      'Checked Out': 'bg-slate-50 text-slate-600 ring-slate-500/10',
+      'Cancelled': 'bg-red-50 text-red-700 ring-red-600/20',
     };
-    return badges[status] || badges.active;
+    return badges[status] || 'bg-slate-50 text-slate-600 ring-slate-500/10';
+  };
+
+  const getStatusText = (status) => {
+    const texts = {
+      'Confirmed': 'Bron qilingan',
+      'Checked In': 'Ichkarida',
+      'Checked Out': 'Chiqib ketgan',
+      'Cancelled': 'Bekor qilingan',
+    };
+    return texts[status] || status;
   };
 
   const availableXonas = rooms.filter(room => room.status === 'Available');
@@ -132,7 +148,7 @@ const Bronlar = () => {
               <form onSubmit={handleReservation} className="space-y-4">
                 <div>
                   <Label htmlFor="guest_reserve">Mehmon</Label>
-                  <Select value={formData.guest_id} onValueChange={(value) => setFormData({ ...formData, guest_id: value })}>
+                  <Select value={formData.guest_ids[0] || ''} onValueChange={(value) => setFormData({ ...formData, guest_ids: [value] })}>
                     <SelectTrigger data-testid="reserve-guest-select" className="mt-2">
                       <SelectValue placeholder="Mehmonni tanlang" />
                     </SelectTrigger>
@@ -206,7 +222,7 @@ const Bronlar = () => {
               <form onSubmit={handleCheckIn} className="space-y-4">
                 <div>
                   <Label htmlFor="guest">Mehmon</Label>
-                  <Select value={formData.guest_id} onValueChange={(value) => setFormData({ ...formData, guest_id: value })}>
+                  <Select value={formData.guest_ids[0] || ''} onValueChange={(value) => setFormData({ ...formData, guest_ids: [value] })}>
                     <SelectTrigger data-testid="checkin-guest-select" className="mt-2">
                       <SelectValue placeholder="Mehmonni tanlang" />
                     </SelectTrigger>
@@ -282,18 +298,22 @@ const Bronlar = () => {
             <tbody>
               {bookings.map((booking) => (
                 <tr key={booking.id} data-testid={`booking-row-${booking.id}`} className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
-                  <td className="px-6 py-4 text-sm text-slate-700 font-medium">{booking.guest_name}</td>
+                  <td className="px-6 py-4 text-sm text-slate-700 font-medium">
+                    {booking.guest_names && booking.guest_names.length > 0
+                      ? booking.guest_names.join(', ')
+                      : '-'}
+                  </td>
                   <td className="px-6 py-4 text-sm text-slate-700">{booking.room_number}</td>
                   <td className="px-6 py-4 text-sm text-slate-700">{booking.check_in_date}</td>
                   <td className="px-6 py-4 text-sm text-slate-700">{booking.check_out_date}</td>
                   <td className="px-6 py-4 text-sm font-semibold text-slate-900">{formatCurrency(booking.total_price)}</td>
                   <td className="px-6 py-4">
                     <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${getStatusBadge(booking.status)}`}>
-                      {booking.status}
+                      {getStatusText(booking.status)}
                     </span>
                   </td>
                   <td className="px-6 py-4">
-                    {booking.status === 'active' && (
+                    {booking.status === 'Checked In' && (
                       <Button
                         data-testid={`checkout-btn-${booking.id}`}
                         onClick={() => handleCheckOut(booking.id)}

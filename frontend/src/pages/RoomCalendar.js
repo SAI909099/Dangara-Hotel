@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Home, User, Clock } from 'lucide-react';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Home, User, Clock, Users, Sparkles, CheckCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+const API_URL = process.env.REACT_APP_API_URL || '/api';
 
 const RoomCalendar = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -13,16 +13,16 @@ const RoomCalendar = () => {
   const [guests, setGuests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [viewType, setViewType] = useState('month');
-  
+
   // Modal states
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [modalType, setModalType] = useState('');
-  
-  // Form states
-  const [selectedGuest, setSelectedGuest] = useState('');
+
+  // Form states - YANGI: Ko'p mehmonlar
+  const [selectedGuests, setSelectedGuests] = useState([]);
   const [checkInDate, setCheckInDate] = useState('');
   const [checkOutDate, setCheckOutDate] = useState('');
   const [totalPrice, setTotalPrice] = useState(0);
@@ -101,23 +101,26 @@ const RoomCalendar = () => {
     setSelectedRoom(room);
     setSelectedDate(date);
     setSelectedBooking(roomStatus.booking || null);
-    
-    if (roomStatus.status === 'available') {
-      setModalType('available');
+
+    if (roomStatus.status === 'available' || roomStatus.status === 'cleaning') {
+      setModalType(roomStatus.status);
       setCheckInDate(date.toISOString().split('T')[0]);
       const tomorrow = new Date(date);
       tomorrow.setDate(tomorrow.getDate() + 1);
       setCheckOutDate(tomorrow.toISOString().split('T')[0]);
+      setSelectedGuests([]); // Reset
     } else if (roomStatus.status === 'reserved') {
       setModalType('reserved');
       setCheckInDate(roomStatus.booking.check_in_date);
       setCheckOutDate(roomStatus.booking.check_out_date);
+      setSelectedGuests(roomStatus.booking.guest_ids || []);
     } else if (roomStatus.status === 'occupied') {
       setModalType('occupied');
       setCheckInDate(roomStatus.booking.check_in_date);
       setCheckOutDate(roomStatus.booking.check_out_date);
+      setSelectedGuests(roomStatus.booking.guest_ids || []);
     }
-    
+
     setModalOpen(true);
   };
 
@@ -126,16 +129,36 @@ const RoomCalendar = () => {
     setSelectedRoom(null);
     setSelectedDate(null);
     setSelectedBooking(null);
-    setSelectedGuest('');
+    setSelectedGuests([]);
     setCheckInDate('');
     setCheckOutDate('');
     setTotalPrice(0);
     setNewRoomId('');
   };
 
+  // YANGI: Mehmon qo'shish/o'chirish
+  const toggleGuest = (guestId) => {
+    if (selectedGuests.includes(guestId)) {
+      setSelectedGuests(selectedGuests.filter(id => id !== guestId));
+    } else {
+      // Xona sig'imini tekshirish
+      if (selectedRoom && selectedGuests.length >= selectedRoom.capacity) {
+        alert(`Xona sig'imi: ${selectedRoom.capacity} kishi. Ko'proq mehmon qo'shib bo'lmaydi.`);
+        return;
+      }
+      setSelectedGuests([...selectedGuests, guestId]);
+    }
+  };
+
   const handleCreateBooking = async () => {
-    if (!selectedGuest || !checkInDate || !checkOutDate) {
-      alert('Iltimos, barcha maydonlarni to\'ldiring!');
+    if (selectedGuests.length === 0 || !checkInDate || !checkOutDate) {
+      alert('Iltimos, kamida bitta mehmon tanlang va sanalarni to\'ldiring!');
+      return;
+    }
+
+    // Xona sig'imini tekshirish
+    if (selectedRoom && selectedGuests.length > selectedRoom.capacity) {
+      alert(`Xona sig'imi: ${selectedRoom.capacity} kishi. Siz ${selectedGuests.length} mehmon tanladingiz.`);
       return;
     }
 
@@ -148,17 +171,16 @@ const RoomCalendar = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          guest_id: selectedGuest,
+          guest_ids: selectedGuests,
           room_id: selectedRoom.id,
           check_in_date: checkInDate,
           check_out_date: checkOutDate,
         }),
       });
 
-      // MUHIM: Response'ni faqat bir marta o'qish
       const responseText = await response.text();
       let errorData;
-      
+
       try {
         errorData = responseText ? JSON.parse(responseText) : {};
       } catch (e) {
@@ -223,7 +245,7 @@ const RoomCalendar = () => {
       });
 
       if (response.ok) {
-        alert('Check-out muvaffaqiyatli amalga oshirildi!');
+        alert('Check-out muvaffaqiyatli! Xona tozalash holatiga o\'tdi.');
         closeModal();
         fetchData();
       } else {
@@ -238,6 +260,30 @@ const RoomCalendar = () => {
       }
     } catch (error) {
       console.error('Check-out xatolik:', error);
+      alert('Xatolik yuz berdi!');
+    }
+  };
+
+  // YANGI: Xonani tozalash holatidan bo'shga o'tkazish
+  const handleMarkAvailable = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/rooms/${selectedRoom.id}/mark-available`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        alert('Xona tozalandi va bo\'sh holatga o\'tkazildi!');
+        closeModal();
+        fetchData();
+      } else {
+        alert('Xatolik yuz berdi');
+      }
+    } catch (error) {
+      console.error('Xatolik:', error);
       alert('Xatolik yuz berdi!');
     }
   };
@@ -293,8 +339,7 @@ const RoomCalendar = () => {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
       };
-      
-      // 1. Hozirgi xonadan check-out qilish
+
       const checkoutRes = await fetch(`${API_URL}/bookings/${selectedBooking.id}/checkout`, {
         method: 'POST',
         headers,
@@ -304,15 +349,14 @@ const RoomCalendar = () => {
         throw new Error('Check-out amalga oshmadi');
       }
 
-      // 2. Yangi xonada yangi bron yaratish
       const newRoom = rooms.find(r => r.id === newRoomId);
       const today = new Date().toISOString().split('T')[0];
-      
+
       const createRes = await fetch(`${API_URL}/bookings`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          guest_id: selectedBooking.guest_id,
+          guest_ids: selectedBooking.guest_ids,
           room_id: newRoomId,
           check_in_date: today,
           check_out_date: checkOutDate,
@@ -325,8 +369,7 @@ const RoomCalendar = () => {
 
       const newBookingText = await createRes.text();
       const newBooking = JSON.parse(newBookingText);
-      
-      // 3. Yangi bronga check-in qilish
+
       const checkinRes = await fetch(`${API_URL}/bookings/${newBooking.id}/checkin`, {
         method: 'POST',
         headers,
@@ -336,7 +379,7 @@ const RoomCalendar = () => {
         throw new Error('Check-in amalga oshmadi');
       }
 
-      alert(`Mehmon ${selectedRoom.room_number} xonasidan ${newRoom.room_number} xonasiga ko'chirildi!`);
+      alert(`Mehmonlar ${selectedRoom.room_number} xonasidan ${newRoom.room_number} xonasiga ko'chirildi!`);
       closeModal();
       fetchData();
     } catch (error) {
@@ -382,26 +425,31 @@ const RoomCalendar = () => {
 
   const getRoomStatus = (room, date) => {
     const dateStr = date.toISOString().split('T')[0];
-    
+
+    // YANGI: Tozalash holatini tekshirish
+    if (room.status === 'Cleaning') {
+      return { status: 'cleaning' };
+    }
+
     const activeBooking = bookings.find(booking => {
       const checkIn = new Date(booking.check_in_date);
       const checkOut = new Date(booking.check_out_date);
       const currentDate = new Date(dateStr);
-      
+
       return booking.room_id === room.id &&
-             currentDate >= checkIn &&
-             currentDate < checkOut &&
-             (booking.status === 'Confirmed' || booking.status === 'Checked In');
+        currentDate >= checkIn &&
+        currentDate < checkOut &&
+        (booking.status === 'Confirmed' || booking.status === 'Checked In');
     });
 
     if (activeBooking) {
-      const guest = guests.find(g => g.id === activeBooking.guest_id);
+      const guestNames = activeBooking.guest_names || [];
       const checkOutDate = new Date(activeBooking.check_out_date);
-      
+
       return {
         status: activeBooking.status === 'Checked In' ? 'occupied' : 'reserved',
         booking: activeBooking,
-        guest: guest,
+        guestNames: guestNames,
         checkOutDate: checkOutDate
       };
     }
@@ -417,6 +465,8 @@ const RoomCalendar = () => {
         return 'bg-yellow-100 border-yellow-300 text-yellow-800';
       case 'available':
         return 'bg-green-100 border-green-300 text-green-800';
+      case 'cleaning':
+        return 'bg-blue-100 border-blue-300 text-blue-800';
       default:
         return 'bg-gray-100 border-gray-300 text-gray-800';
     }
@@ -430,8 +480,25 @@ const RoomCalendar = () => {
         return 'bg-yellow-500';
       case 'available':
         return 'bg-green-500';
+      case 'cleaning':
+        return 'bg-blue-500';
       default:
         return 'bg-gray-500';
+    }
+  };
+
+  const getStatusText = (status) => {
+    switch (status) {
+      case 'occupied':
+        return 'BAND';
+      case 'reserved':
+        return 'BRON';
+      case 'available':
+        return 'BO\'SH';
+      case 'cleaning':
+        return 'TOZALANMOQDA';
+      default:
+        return status;
     }
   };
 
@@ -439,7 +506,7 @@ const RoomCalendar = () => {
     const year = date.getFullYear();
     const month = date.getMonth();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
-    
+
     const days = [];
     for (let i = 1; i <= daysInMonth; i++) {
       days.push(new Date(year, month, i));
@@ -480,17 +547,19 @@ const RoomCalendar = () => {
     let totalOccupied = 0;
     let totalReserved = 0;
     let totalAvailable = 0;
+    let totalCleaning = 0;
 
     rooms.forEach(room => {
       days.forEach(day => {
         const status = getRoomStatus(room, day);
         if (status.status === 'occupied') totalOccupied++;
         else if (status.status === 'reserved') totalReserved++;
+        else if (status.status === 'cleaning') totalCleaning++;
         else totalAvailable++;
       });
     });
 
-    return { totalOccupied, totalReserved, totalAvailable };
+    return { totalOccupied, totalReserved, totalAvailable, totalCleaning };
   };
 
   if (loading) {
@@ -525,7 +594,7 @@ const RoomCalendar = () => {
         </div>
       </div>
 
-      {/* Izoh */}
+      {/* Izoh - YANGILANGAN */}
       <Card>
         <CardContent className="pt-6">
           <div className="flex flex-wrap gap-6">
@@ -540,6 +609,10 @@ const RoomCalendar = () => {
             <div className="flex items-center gap-2">
               <div className="w-4 h-4 rounded bg-red-500"></div>
               <span className="text-sm font-medium">Band</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded bg-blue-500"></div>
+              <span className="text-sm font-medium">Tozalanmoqda</span>
             </div>
           </div>
         </CardContent>
@@ -574,9 +647,8 @@ const RoomCalendar = () => {
                     {getDaysInMonth(currentDate).map((day, idx) => (
                       <th
                         key={idx}
-                        className={`border border-slate-300 p-2 text-center text-xs min-w-[100px] ${
-                          isToday(day) ? 'bg-blue-50' : 'bg-slate-50'
-                        }`}
+                        className={`border border-slate-300 p-2 text-center text-xs min-w-[100px] ${isToday(day) ? 'bg-blue-50' : 'bg-slate-50'
+                          }`}
                       >
                         <div className="font-semibold">{day.getDate()}</div>
                         <div className="text-slate-500 font-normal">
@@ -595,6 +667,7 @@ const RoomCalendar = () => {
                           <div>
                             <div className="font-semibold">{room.room_number}</div>
                             <div className="text-xs text-slate-500">{room.room_type}</div>
+                            <div className="text-xs text-slate-400">{room.capacity} kishi</div>
                           </div>
                         </div>
                       </td>
@@ -606,17 +679,22 @@ const RoomCalendar = () => {
                             onClick={() => handleCellClick(room, day, roomStatus)}
                             className={`border border-slate-300 p-2 text-center cursor-pointer hover:opacity-80 transition-opacity ${getStatusColor(roomStatus.status)}`}
                           >
-                            {roomStatus.status === 'occupied' || roomStatus.status === 'reserved' ? (
+                            {roomStatus.status === 'cleaning' ? (
+                              <div className="text-xs space-y-1">
+                                <Badge className="bg-blue-500 text-white text-[10px] px-1 py-0">
+                                  TOZALANMOQDA
+                                </Badge>
+                                <Sparkles className="w-4 h-4 mx-auto text-blue-600" />
+                              </div>
+                            ) : roomStatus.status === 'occupied' || roomStatus.status === 'reserved' ? (
                               <div className="text-xs space-y-1">
                                 <Badge className={`${getStatusBadgeColor(roomStatus.status)} text-white text-[10px] px-1 py-0`}>
-                                  {roomStatus.status === 'occupied' ? 'BAND' : 'BRON'}
+                                  {getStatusText(roomStatus.status)}
                                 </Badge>
-                                {roomStatus.guest && (
+                                {roomStatus.guestNames && roomStatus.guestNames.length > 0 && (
                                   <div className="flex items-center justify-center gap-1 text-[10px]">
-                                    <User className="w-3 h-3" />
-                                    <span className="truncate max-w-[70px]">
-                                      {roomStatus.guest.full_name.split(' ')[0]}
-                                    </span>
+                                    <Users className="w-3 h-3" />
+                                    <span>{roomStatus.guestNames.length} mehmon</span>
                                   </div>
                                 )}
                                 {roomStatus.checkOutDate && (
@@ -641,13 +719,13 @@ const RoomCalendar = () => {
         </Card>
       )}
 
-      {/* Yillik Ko'rinish */}
+      {/* Yillik Ko'rinish - YANGILANGAN */}
       {viewType === 'year' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {getMonthsInYear(currentDate).map((month, idx) => {
             const summary = getMonthSummary(month);
-            const totalDays = summary.totalOccupied + summary.totalReserved + summary.totalAvailable;
-            const occupancyRate = totalDays > 0 
+            const totalDays = summary.totalOccupied + summary.totalReserved + summary.totalAvailable + summary.totalCleaning;
+            const occupancyRate = totalDays > 0
               ? ((summary.totalOccupied / totalDays) * 100).toFixed(1)
               : 0;
 
@@ -664,7 +742,7 @@ const RoomCalendar = () => {
                       <span className="text-sm text-slate-600">Bandlik darajasi:</span>
                       <span className="text-lg font-bold text-slate-900">{occupancyRate}%</span>
                     </div>
-                    
+
                     <div className="space-y-2">
                       <div className="flex items-center justify-between text-sm">
                         <div className="flex items-center gap-2">
@@ -673,15 +751,23 @@ const RoomCalendar = () => {
                         </div>
                         <span className="font-semibold">{summary.totalOccupied}</span>
                       </div>
-                      
+
                       <div className="flex items-center justify-between text-sm">
                         <div className="flex items-center gap-2">
                           <div className="w-3 h-3 rounded bg-yellow-500"></div>
-                          <span>Bron qilingan</span>
+                          <span>Bron</span>
                         </div>
                         <span className="font-semibold">{summary.totalReserved}</span>
                       </div>
-                      
+
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded bg-blue-500"></div>
+                          <span>Tozalanmoqda</span>
+                        </div>
+                        <span className="font-semibold">{summary.totalCleaning}</span>
+                      </div>
+
                       <div className="flex items-center justify-between text-sm">
                         <div className="flex items-center gap-2">
                           <div className="w-3 h-3 rounded bg-green-500"></div>
@@ -711,7 +797,7 @@ const RoomCalendar = () => {
       )}
 
       {/* Umumiy Statistika */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
@@ -749,9 +835,23 @@ const RoomCalendar = () => {
             </div>
           </CardContent>
         </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-slate-600">Tozalanmoqda</p>
+                <p className="text-2xl font-bold text-slate-900">
+                  {rooms.filter(r => r.status === 'Cleaning').length}
+                </p>
+              </div>
+              <Sparkles className="w-8 h-8 text-slate-400" />
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Modal - QISQARTIRILGAN (kodning qolgan qismi davom etadi) */}
+      {/* Modal */}
       {modalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -759,8 +859,9 @@ const RoomCalendar = () => {
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-slate-900">
                   {modalType === 'available' && 'Yangi Bron Yaratish'}
+                  {modalType === 'cleaning' && 'Xona Tozalanmoqda'}
                   {modalType === 'reserved' && 'Bron Ma\'lumotlari'}
-                  {modalType === 'occupied' && 'Mehmon Ma\'lumotlari'}
+                  {modalType === 'occupied' && 'Mehmonlar Ma\'lumotlari'}
                 </h2>
                 <button onClick={closeModal} className="text-slate-400 hover:text-slate-600 text-2xl font-bold">×</button>
               </div>
@@ -770,7 +871,7 @@ const RoomCalendar = () => {
                   <Home className="w-6 h-6 text-slate-600" />
                   <div>
                     <h3 className="font-semibold text-lg">Xona: {selectedRoom?.room_number}</h3>
-                    <p className="text-sm text-slate-600">{selectedRoom?.room_type}</p>
+                    <p className="text-sm text-slate-600">{selectedRoom?.room_type} - {selectedRoom?.capacity} kishilik</p>
                     <p className="text-sm font-semibold text-slate-900">
                       {selectedRoom?.price_per_night?.toLocaleString()} so'm / kun
                     </p>
@@ -778,18 +879,55 @@ const RoomCalendar = () => {
                 </div>
               </div>
 
-              {/* Available Room Modal */}
+              {/* Tozalash holati modal */}
+              {modalType === 'cleaning' && (
+                <div className="space-y-4">
+                  <div className="p-4 bg-blue-50 rounded-lg text-center">
+                    <Sparkles className="w-12 h-12 mx-auto mb-2 text-blue-600" />
+                    <p className="text-lg font-semibold text-blue-900">Xona tozalanmoqda</p>
+                    <p className="text-sm text-blue-700 mt-2">Tozalash tugagandan keyin xonani bo'sh holatga o'tkazing</p>
+                  </div>
+                  <Button onClick={handleMarkAvailable} className="w-full bg-green-600 hover:bg-green-700">
+                    <CheckCircle className="w-4 h-4 mr-2" />
+                    Tozalash Tugadi - Bo'sh Holatga O'tkazish
+                  </Button>
+                  <Button onClick={closeModal} variant="outline" className="w-full">
+                    Yopish
+                  </Button>
+                </div>
+              )}
+
+              {/* Available Room Modal - YANGILANGAN */}
               {modalType === 'available' && (
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Mehmonni tanlang</label>
-                    <select value={selectedGuest} onChange={(e) => setSelectedGuest(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                      <option value="">Mehmon tanlang...</option>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      Mehmonlarni tanlang ({selectedGuests.length}/{selectedRoom?.capacity})
+                    </label>
+                    <div className="border border-slate-300 rounded-lg p-4 max-h-48 overflow-y-auto space-y-2">
                       {guests.map((guest) => (
-                        <option key={guest.id} value={guest.id}>{guest.full_name} - {guest.phone}</option>
+                        <label key={guest.id} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={selectedGuests.includes(guest.id)}
+                            onChange={() => toggleGuest(guest.id)}
+                            className="w-4 h-4"
+                          />
+                          <div className="flex-1">
+                            <div className="font-medium">{guest.full_name}</div>
+                            <div className="text-sm text-slate-500">{guest.phone}</div>
+                          </div>
+                        </label>
                       ))}
-                    </select>
+                    </div>
+                    {selectedGuests.length === 0 && (
+                      <p className="text-sm text-red-600 mt-2">Kamida bitta mehmon tanlang</p>
+                    )}
+                    {selectedGuests.length > 0 && (
+                      <p className="text-sm text-green-600 mt-2">
+                        {selectedGuests.length} mehmon tanlandi
+                      </p>
+                    )}
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -814,8 +952,13 @@ const RoomCalendar = () => {
                     </div>
                   )}
                   <div className="flex gap-3 mt-6">
-                    <Button onClick={handleCreateBooking} disabled={!selectedGuest || !checkInDate || !checkOutDate}
-                      className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-50">Bron Yaratish</Button>
+                    <Button
+                      onClick={handleCreateBooking}
+                      disabled={selectedGuests.length === 0 || !checkInDate || !checkOutDate}
+                      className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-50"
+                    >
+                      Bron Yaratish
+                    </Button>
                     <Button onClick={closeModal} variant="outline" className="flex-1">Bekor qilish</Button>
                   </div>
                 </div>
@@ -825,11 +968,18 @@ const RoomCalendar = () => {
               {modalType === 'reserved' && selectedBooking && (
                 <div className="space-y-4">
                   <div className="p-4 bg-yellow-50 rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <User className="w-5 h-5 text-yellow-700" />
-                      <span className="font-semibold">{guests.find(g => g.id === selectedBooking.guest_id)?.full_name}</span>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Users className="w-5 h-5 text-yellow-700" />
+                      <span className="font-semibold text-lg">Mehmonlar ({selectedBooking.guest_names?.length || 0}):</span>
                     </div>
-                    <p className="text-sm text-slate-600">Telefon: {guests.find(g => g.id === selectedBooking.guest_id)?.phone}</p>
+                    <div className="space-y-1">
+                      {selectedBooking.guest_names && selectedBooking.guest_names.map((name, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <User className="w-4 h-4 text-yellow-600" />
+                          <span className="text-sm">{name}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -867,12 +1017,19 @@ const RoomCalendar = () => {
               {modalType === 'occupied' && selectedBooking && (
                 <div className="space-y-4">
                   <div className="p-4 bg-red-50 rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <User className="w-5 h-5 text-red-700" />
-                      <span className="font-semibold">{guests.find(g => g.id === selectedBooking.guest_id)?.full_name}</span>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Users className="w-5 h-5 text-red-700" />
+                      <span className="font-semibold text-lg">Mehmonlar ({selectedBooking.guest_names?.length || 0}):</span>
                     </div>
-                    <p className="text-sm text-slate-600">Telefon: {guests.find(g => g.id === selectedBooking.guest_id)?.phone}</p>
-                    <p className="text-sm text-slate-600 mt-2">Check-in: {new Date(selectedBooking.check_in_date).toLocaleDateString('uz-UZ')}</p>
+                    <div className="space-y-1">
+                      {selectedBooking.guest_names && selectedBooking.guest_names.map((name, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <User className="w-4 h-4 text-red-600" />
+                          <span className="text-sm">{name}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-sm text-slate-600 mt-3">Check-in: {new Date(selectedBooking.check_in_date).toLocaleDateString('uz-UZ')}</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-2">Check-out sanasi</label>
@@ -910,7 +1067,9 @@ const RoomCalendar = () => {
                     {newRoomId && <p className="text-sm text-slate-600 mt-2">Hozirgi xonadan chiqib, yangi xonaga kirish amalga oshiriladi</p>}
                   </div>
                   <div className="flex gap-3 mt-6">
-                    <Button onClick={handleCheckOut} className="flex-1 bg-orange-600 hover:bg-orange-700">Check-out Qilish</Button>
+                    <Button onClick={handleCheckOut} className="flex-1 bg-orange-600 hover:bg-orange-700">
+                      Check-out Qilish
+                    </Button>
                     {checkOutDate !== selectedBooking.check_out_date && (
                       <Button onClick={handleUpdateDates} variant="outline" className="flex-1">Muddatni Uzaytirish</Button>
                     )}

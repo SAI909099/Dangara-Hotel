@@ -15,6 +15,12 @@ const API = '';
 
 const statusLabel = (s) => {
   const m = {
+    // Backend statuses (exact match)
+    'Confirmed': 'Bron qilingan',
+    'Checked In': 'Check-in',
+    'Checked Out': 'Check-out',
+    'Cancelled': 'Bekor qilingan',
+    // Legacy lowercase fallbacks
     reserved: 'Bron qilingan',
     checked_in: 'Check-in',
     checked_out: 'Check-out',
@@ -173,7 +179,7 @@ const GuestHistory = () => {
           <h1>${title}</h1>
           <div class="meta">
             Telefon: ${guest?.phone || '-'} &nbsp; | &nbsp;
-            ID: ${(guest?.id_number || guest?.passport_id || '-') }
+            ID: ${(guest?.id_number || guest?.passport_id || '-')}
           </div>
           <table>
             <thead>
@@ -187,9 +193,8 @@ const GuestHistory = () => {
               </tr>
             </thead>
             <tbody>
-              ${
-                rows.length
-                  ? rows.map(r => `
+              ${rows.length
+        ? rows.map(r => `
                     <tr>
                       <td>${r.room_number || r.room?.number || '-'}</td>
                       <td>${r.check_in_date || r.check_in || '-'}</td>
@@ -199,8 +204,8 @@ const GuestHistory = () => {
                       <td>${formatUZS(getAmount(r))}</td>
                     </tr>
                   `).join('')
-                  : `<tr><td colspan="6" style="text-align:center;color:#666;">Ma'lumot yo‘q</td></tr>`
-              }
+        : `<tr><td colspan="6" style="text-align:center;color:#666;">Ma'lumot yo‘q</td></tr>`
+      }
             </tbody>
           </table>
           <script>window.onload = () => window.print();</script>

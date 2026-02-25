@@ -12,7 +12,7 @@ import axios from "axios";
  */
 
 // 1) read backend
-const rawBackend = process.env.REACT_APP_BACKEND_URL || "http://localhost:8000";
+const rawBackend = process.env.REACT_APP_BACKEND_URL || "";
 
 // 2) normalize (remove trailing slashes)
 let backend = String(rawBackend).trim().replace(/\/+$/, "");

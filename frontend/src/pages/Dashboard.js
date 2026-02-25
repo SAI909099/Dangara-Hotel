@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { DoorOpen, Users, Calendar, TrendingUp, BarChart3, LineChart as LineChartIcon } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Cell } from 'recharts';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+const API_URL = process.env.REACT_APP_API_URL || '/api';
 
 const Dashboard = () => {
   const [stats, setStats] = useState(null);
@@ -30,7 +30,7 @@ const Dashboard = () => {
       if (statsRes.ok && revenueRes.ok) {
         const statsData = await statsRes.json();
         const revenueDataResult = await revenueRes.json();
-        
+
         setStats(statsData);
         setRevenueData(revenueDataResult);
       }
@@ -42,15 +42,15 @@ const Dashboard = () => {
   };
 
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('uz-UZ', { 
+    return new Intl.NumberFormat('uz-UZ', {
       minimumFractionDigits: 0,
-      maximumFractionDigits: 0 
+      maximumFractionDigits: 0
     }).format(amount).replace(/,/g, ' ') + ' so\'m';
   };
 
   const MetricCard = ({ title, value, icon: Icon, color, testId, gradient }) => (
-    <div 
-      data-testid={testId} 
+    <div
+      data-testid={testId}
       className="bg-white rounded-2xl border border-slate-200 p-6 hover:shadow-xl transition-all duration-300 hover:scale-105 hover:border-slate-300 group"
     >
       <div className="flex items-center justify-between mb-4">
@@ -167,7 +167,7 @@ const Dashboard = () => {
             </div>
             <div className="h-80">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart 
+                <BarChart
                   data={revenueData}
                   onMouseMove={(state) => {
                     if (state.isTooltipActive) {
@@ -179,25 +179,25 @@ const Dashboard = () => {
                   onMouseLeave={() => setHoveredBar(null)}
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis 
-                    dataKey="month" 
+                  <XAxis
+                    dataKey="month"
                     stroke="#64748b"
                     style={{ fontSize: '12px', fontWeight: '500' }}
                   />
-                  <YAxis 
-                    stroke="#64748b" 
+                  <YAxis
+                    stroke="#64748b"
                     tickFormatter={(value) => `${(value / 1000000).toFixed(1)}M`}
                     style={{ fontSize: '12px', fontWeight: '500' }}
                   />
                   <Tooltip content={<CustomTooltip />} />
-                  <Bar 
-                    dataKey="revenue" 
+                  <Bar
+                    dataKey="revenue"
                     radius={[12, 12, 0, 0]}
                     animationDuration={1000}
                     animationBegin={0}
                   >
                     {revenueData.map((entry, index) => (
-                      <Cell 
+                      <Cell
                         key={`cell-${index}`}
                         fill={hoveredBar === index ? '#d4af37' : '#1e1b4b'}
                         style={{
@@ -227,29 +227,29 @@ const Dashboard = () => {
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={revenueData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis 
-                    dataKey="month" 
+                  <XAxis
+                    dataKey="month"
                     stroke="#64748b"
                     style={{ fontSize: '12px', fontWeight: '500' }}
                   />
-                  <YAxis 
-                    stroke="#64748b" 
+                  <YAxis
+                    stroke="#64748b"
                     tickFormatter={(value) => `${(value / 1000000).toFixed(1)}M`}
                     style={{ fontSize: '12px', fontWeight: '500' }}
                   />
                   <Tooltip content={<CustomTooltip />} />
-                  <Line 
-                    type="monotone" 
-                    dataKey="revenue" 
-                    stroke="#d4af37" 
-                    strokeWidth={4} 
-                    dot={{ 
-                      fill: '#d4af37', 
+                  <Line
+                    type="monotone"
+                    dataKey="revenue"
+                    stroke="#d4af37"
+                    strokeWidth={4}
+                    dot={{
+                      fill: '#d4af37',
                       r: 6,
                       strokeWidth: 3,
                       stroke: '#fff'
                     }}
-                    activeDot={{ 
+                    activeDot={{
                       r: 10,
                       fill: '#d4af37',
                       stroke: '#fff',

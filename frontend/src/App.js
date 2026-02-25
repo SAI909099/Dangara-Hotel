@@ -8,6 +8,8 @@ import Dashboard from '@/pages/Dashboard';
 import Rooms from '@/pages/Rooms';
 import Guests from '@/pages/Guests';
 import GuestCreate from '@/pages/GuestCreate';
+import GuestDetail from '@/pages/GuestDetail';
+import GuestHistory from '@/pages/GuestHistory';
 import Bookings from '@/pages/Bookings';
 import Reports from '@/pages/Reports';
 import Users from '@/pages/Users';
@@ -36,7 +38,7 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
-      
+
       <Route path="/" element={
         <ProtectedRoute>
           <Layout>
@@ -44,7 +46,7 @@ function AppRoutes() {
           </Layout>
         </ProtectedRoute>
       } />
-      
+
       <Route path="/rooms" element={
         <ProtectedRoute>
           <Layout>
@@ -52,7 +54,7 @@ function AppRoutes() {
           </Layout>
         </ProtectedRoute>
       } />
-      
+
       <Route path="/guests" element={
         <ProtectedRoute>
           <Layout>
@@ -60,7 +62,7 @@ function AppRoutes() {
           </Layout>
         </ProtectedRoute>
       } />
-      
+
       {/* Yangi mehmon qo'shish sahifasi */}
       <Route path="/guests/new" element={
         <ProtectedRoute>
@@ -69,7 +71,25 @@ function AppRoutes() {
           </Layout>
         </ProtectedRoute>
       } />
-      
+
+      {/* Mehmon tafsilotlari */}
+      <Route path="/guests/:guestId" element={
+        <ProtectedRoute>
+          <Layout>
+            <GuestDetail />
+          </Layout>
+        </ProtectedRoute>
+      } />
+
+      {/* Mehmon tarixi */}
+      <Route path="/guests/:guestId/history" element={
+        <ProtectedRoute>
+          <Layout>
+            <GuestHistory />
+          </Layout>
+        </ProtectedRoute>
+      } />
+
       <Route path="/bookings" element={
         <ProtectedRoute>
           <Layout>
@@ -77,7 +97,7 @@ function AppRoutes() {
           </Layout>
         </ProtectedRoute>
       } />
-      
+
       <Route path="/calendar" element={
         <ProtectedRoute>
           <Layout>
@@ -85,7 +105,7 @@ function AppRoutes() {
           </Layout>
         </ProtectedRoute>
       } />
-      
+
       <Route path="/reports" element={
         <ProtectedRoute>
           <Layout>
@@ -93,7 +113,7 @@ function AppRoutes() {
           </Layout>
         </ProtectedRoute>
       } />
-      
+
       <Route path="/users" element={
         <ProtectedRoute adminOnly>
           <Layout>

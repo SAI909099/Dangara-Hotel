@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { ArrowLeft, Save } from "lucide-react";
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+const API_URL = process.env.REACT_APP_API_URL || '/api';
 
 export default function GuestCreate() {
   const navigate = useNavigate();
@@ -199,17 +199,17 @@ export default function GuestCreate() {
           </div>
 
           <div className="md:col-span-2 flex gap-2 pt-2">
-            <Button 
-              type="submit" 
-              disabled={saving} 
+            <Button
+              type="submit"
+              disabled={saving}
               className="bg-[#1e1b4b] hover:bg-[#312e81] text-white"
             >
               {saving ? "Saqlanmoqda..." : "Saqlash"}
             </Button>
-            <Button 
-              type="button" 
-              variant="outline" 
-              className="border-slate-200 hover:bg-slate-50" 
+            <Button
+              type="button"
+              variant="outline"
+              className="border-slate-200 hover:bg-slate-50"
               onClick={() => navigate("/guests")}
             >
               Bekor qilish
