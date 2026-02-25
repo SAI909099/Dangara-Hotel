@@ -1,0 +1,161 @@
+{
+  "typography": {
+    "font_family": {
+      "headings": "Manrope, sans-serif",
+      "body": "Inter, sans-serif",
+      "mono": "JetBrains Mono, monospace"
+    },
+    "weights": {
+      "light": 300,
+      "regular": 400,
+      "medium": 500,
+      "semibold": 600,
+      "bold": 700,
+      "black": 900
+    },
+    "sizes": {
+      "h1": "text-4xl md:text-5xl font-bold tracking-tight",
+      "h2": "text-3xl md:text-4xl font-semibold tracking-tight",
+      "h3": "text-2xl font-semibold tracking-tight",
+      "h4": "text-xl font-medium tracking-tight",
+      "body": "text-base leading-relaxed",
+      "small": "text-sm font-medium leading-none",
+      "tiny": "text-xs font-medium uppercase tracking-wider"
+    }
+  },
+  "colors": {
+    "theme": "light",
+    "palette": {
+      "primary": {
+        "DEFAULT": "#1e1b4b",
+        "foreground": "#ffffff",
+        "hover": "#312e81",
+        "active": "#1e1b4b"
+      },
+      "secondary": {
+        "DEFAULT": "#f3f4f6",
+        "foreground": "#1f2937",
+        "hover": "#e5e7eb"
+      },
+      "accent": {
+        "DEFAULT": "#d4af37",
+        "foreground": "#ffffff",
+        "hover": "#b5952f"
+      },
+      "background": {
+        "DEFAULT": "#ffffff",
+        "subtle": "#f8fafc",
+        "sidebar": "#0f172a"
+      },
+      "text": {
+        "primary": "#0f172a",
+        "secondary": "#64748b",
+        "muted": "#94a3b8",
+        "inverted": "#ffffff"
+      },
+      "border": {
+        "DEFAULT": "#e2e8f0",
+        "subtle": "#f1f5f9",
+        "focus": "#1e1b4b"
+      },
+      "status": {
+        "success": "#10b981",
+        "warning": "#f59e0b",
+        "error": "#ef4444",
+        "info": "#3b82f6"
+      }
+    }
+  },
+  "layout": {
+    "grid": {
+      "dashboard": "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6",
+      "form": "grid grid-cols-1 md:grid-cols-2 gap-8",
+      "card_grid": "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"
+    },
+    "spacing": {
+      "container": "p-6 md:p-8 lg:p-12",
+      "section": "py-12 md:py-16",
+      "element": "mb-6"
+    },
+    "sidebar": {
+      "width": "w-64",
+      "collapsed_width": "w-20",
+      "bg": "bg-slate-900"
+    },
+    "header": {
+      "height": "h-16",
+      "bg": "bg-white/80 backdrop-blur-md border-b border-slate-200"
+    }
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-[#1e1b4b] text-white hover:bg-[#312e81] rounded-md px-6 py-2.5 font-medium transition-all duration-200 shadow-sm hover:shadow-md active:scale-95",
+      "secondary": "bg-white text-slate-900 border border-slate-200 hover:bg-slate-50 rounded-md px-6 py-2.5 font-medium transition-all duration-200",
+      "ghost": "bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900 rounded-md px-4 py-2 transition-colors",
+      "destructive": "bg-red-50 text-red-600 hover:bg-red-100 rounded-md px-6 py-2.5 font-medium transition-colors"
+    },
+    "cards": {
+      "base": "bg-white rounded-xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow duration-300 p-6",
+      "metric": "bg-white rounded-xl border border-slate-100 p-6 flex flex-col justify-between h-full relative overflow-hidden group hover:border-slate-200 transition-colors"
+    },
+    "inputs": {
+      "base": "flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1e1b4b] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+      "label": "text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 mb-2 block text-slate-700"
+    },
+    "tables": {
+      "container": "w-full overflow-auto rounded-lg border border-slate-200 shadow-sm",
+      "header": "bg-slate-50 text-slate-500 text-xs uppercase font-semibold tracking-wider px-6 py-3 text-left",
+      "row": "border-b border-slate-100 hover:bg-slate-50/50 transition-colors",
+      "cell": "px-6 py-4 text-sm text-slate-700 whitespace-nowrap"
+    },
+    "badges": {
+      "success": "inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20",
+      "warning": "inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20",
+      "error": "inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-medium text-red-700 ring-1 ring-inset ring-red-600/20",
+      "neutral": "inline-flex items-center rounded-full bg-slate-50 px-2.5 py-0.5 text-xs font-medium text-slate-600 ring-1 ring-inset ring-slate-500/10"
+    }
+  },
+  "visual_enhancers": {
+    "shadows": {
+      "soft": "0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -1px rgba(0, 0, 0, 0.02)",
+      "medium": "0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.025)",
+      "glow": "0 0 15px rgba(30, 27, 75, 0.1)"
+    },
+    "borders": {
+      "subtle": "1px solid #f1f5f9",
+      "active": "1px solid #1e1b4b"
+    },
+    "radius": {
+      "default": "0.5rem",
+      "large": "0.75rem",
+      "pill": "9999px"
+    }
+  },
+  "images": {
+    "dashboard_hero": "https://images.unsplash.com/photo-1723465302725-ff46b3e165f9",
+    "room_placeholder": "https://images.unsplash.com/photo-1572177215152-32f247303126",
+    "receptionist_avatar": "https://images.unsplash.com/photo-1561444372-9a1cd3ebf2af",
+    "login_bg": "https://images.unsplash.com/photo-1723465302725-ff46b3e165f9"
+  },
+  "universal_guidelines": [
+    "Use 'Manrope' for all headings to give a modern, clean look.",
+    "Use 'Inter' for body text for maximum readability.",
+    "Primary color is Deep Indigo (#1e1b4b). Use it for primary actions and active states.",
+    "Accent color is Soft Gold (#d4af37). Use sparingly for premium touches (e.g., VIP status, special offers).",
+    "Layouts must be spacious. Use 'p-6' or 'p-8' for container padding.",
+    "Cards should be flat with a subtle border ('border-slate-100') and very soft shadow.",
+    "Avoid gradients for backgrounds. Use solid colors or subtle noise textures if needed.",
+    "All interactive elements must have a hover state (e.g., 'hover:bg-slate-50').",
+    "Use 'sonner' for toast notifications.",
+    "Currency formatting: '1 000 000 UZS' (space as thousand separator).",
+    "Date formatting: 'DD.MM.YYYY' (European/Central Asian standard).",
+    "Ensure high contrast for text. No gray-on-gray that is hard to read.",
+    "Use 'data-testid' for all interactive elements.",
+    "Sidebar should be dark ('bg-slate-900') to contrast with the light content area.",
+    "Charts should use the brand palette (Indigo, Gold, Emerald, Slate).",
+    "Do not use 'teal' colors as they are forbidden.",
+    "Do not use 'Inter' for headings.",
+    "Do not center-align everything. Use left alignment for text and forms."
+  ],
+  "instructions_to_main_agent": "You are building the 'Dangara Hotel' Admin Panel. Follow the design system strictly. Use the provided image URLs for placeholders. Implement the 'Swiss & High-Contrast' archetype. Ensure the dashboard is responsive and works well on mobile. Use 'recharts' for charts. Use 'lucide-react' for icons. Create a 'Layout' component that handles the Sidebar and Header structure. Use 'react-router-dom' for navigation."
+}
