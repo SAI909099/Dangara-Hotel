@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { userHasPermission } from '@/lib/permissions';
 import { 
   LayoutDashboard, 
   DoorOpen, 
@@ -27,16 +28,18 @@ const Layout = ({ children }) => {
   };
 
   const navItems = [
-    { path: '/', icon: LayoutDashboard, label: 'Boshqaruv Paneli', roles: ['admin', 'receptionist'] },
-    { path: '/rooms', icon: DoorOpen, label: 'Xonalar', roles: ['admin', 'receptionist'] },
-    { path: '/guests', icon: Users, label: 'Mehmonlar', roles: ['admin', 'receptionist'] },
-    { path: '/bookings', icon: Calendar, label: 'Bronlar', roles: ['admin', 'receptionist'] },
-    { path: '/calendar', icon: CalendarDays, label: 'Xonalar Taqvimi', roles: ['admin', 'receptionist'] },
-    { path: '/reports', icon: BarChart3, label: 'Hisobotlar', roles: ['admin', 'receptionist'] },
-    { path: '/users', icon: UserCog, label: 'Foydalanuvchilar', roles: ['admin'] },
+    { path: '/', icon: LayoutDashboard, label: 'Boshqaruv Paneli', permission: 'dashboard', roles: ['admin', 'receptionist', 'accountant'] },
+    { path: '/rooms', icon: DoorOpen, label: 'Xonalar', permission: 'rooms', roles: ['admin', 'receptionist', 'accountant'] },
+    { path: '/guests', icon: Users, label: 'Mehmonlar', permission: 'guests', roles: ['admin', 'receptionist', 'accountant'] },
+    { path: '/bookings', icon: Calendar, label: 'Bronlar', permission: 'bookings', roles: ['admin', 'receptionist', 'accountant'] },
+    { path: '/calendar', icon: CalendarDays, label: 'Xonalar Taqvimi', permission: 'calendar', roles: ['admin', 'receptionist', 'accountant'] },
+    { path: '/reports', icon: BarChart3, label: 'Hisobotlar', permission: 'reports', roles: ['admin', 'receptionist', 'accountant'] },
+    { path: '/users', icon: UserCog, label: 'Foydalanuvchilar', permission: 'users', roles: ['admin'] },
   ];
 
-  const filteredNavItems = navItems.filter(item => item.roles.includes(user?.role));
+  const filteredNavItems = navItems.filter((item) =>
+    item.roles.includes(user?.role) && userHasPermission(user, item.permission)
+  );
 
   return (
     <div className="flex h-screen bg-slate-50">
@@ -57,7 +60,9 @@ const Layout = ({ children }) => {
           <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
             {filteredNavItems.map((item) => {
               const Icon = item.icon;
-              const isActive = location.pathname === item.path;
+              const isActive = item.path === '/'
+                ? location.pathname === '/'
+                : location.pathname.startsWith(item.path);
               return (
                 <Link
                   key={item.path}

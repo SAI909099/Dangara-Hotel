@@ -24,16 +24,6 @@ db = client[os.environ['DB_NAME']]
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
-# CORS middleware MUST be added before routers
-cors_origins = os.environ.get('CORS_ORIGINS', 'http://localhost:3000').split(',')
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=cors_origins,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
 
@@ -41,18 +31,49 @@ SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'dangara-hotel-secret-key-2025')
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7
 
+PAGE_KEYS = ["dashboard", "rooms", "guests", "bookings", "calendar", "reports", "users"]
+
+
+def get_default_permissions_for_role(role: Optional[str]) -> List[str]:
+    role_key = (role or "").strip().lower()
+    if role_key == "admin":
+        return PAGE_KEYS.copy()
+    if role_key == "accountant":
+        return ["dashboard", "reports"]
+    if role_key in {"receptionist", "reception", "reseption"}:
+        return ["dashboard", "rooms", "guests", "bookings", "calendar"]
+    return ["dashboard"]
+
+
+def normalize_permissions(permissions: Optional[List[str]], role: Optional[str]) -> List[str]:
+    source = permissions if isinstance(permissions, list) and permissions else get_default_permissions_for_role(role)
+    cleaned = []
+    seen = set()
+    for item in source:
+        if not item:
+            continue
+        key = str(item).strip().lower()
+        if key in PAGE_KEYS and key not in seen:
+            seen.add(key)
+            cleaned.append(key)
+    if "dashboard" not in cleaned:
+        cleaned.insert(0, "dashboard")
+    return cleaned
+
 # Models
 class User(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     username: str
     role: str
+    permissions: List[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class UserCreate(BaseModel):
     username: str
     password: str
     role: str
+    permissions: Optional[List[str]] = None
 
 class LoginRequest(BaseModel):
     username: str
@@ -175,6 +196,78 @@ class MonthlyReport(BaseModel):
     total_income: float
     most_used_room_type: str
 
+# ============== YANGI: Chiqimlar (Expenses) Models ==============
+
+class Expense(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    title: str                    # Chiqim nomi
+    category: str                 # Kategoriya: "Maosh" | "Kommunal" | "Ta'mirlash" | "Oziq-ovqat" | "Boshqa"
+    amount: float                 # Summa
+    description: Optional[str] = ""
+    date: str                     # Sana: "2025-01-15"
+    created_by: Optional[str] = None  # Kim qo'shdi
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class ExpenseCreate(BaseModel):
+    title: str
+    category: str
+    amount: float
+    description: Optional[str] = ""
+    date: Optional[str] = None     # Agar berilmasa bugungi sana
+
+class ExpenseUpdate(BaseModel):
+    title: Optional[str] = None
+    category: Optional[str] = None
+    amount: Optional[float] = None
+    description: Optional[str] = None
+    date: Optional[str] = None
+
+class ExpenseSummary(BaseModel):
+    total_expenses: float
+    total_income: float
+    net_profit: float
+    expenses_by_category: dict
+    expense_count: int
+
+
+STATUS_ALIASES = {
+    "reserved": "Confirmed",
+    "confirmed": "Confirmed",
+    "checked_in": "Checked In",
+    "checked in": "Checked In",
+    "checked_out": "Checked Out",
+    "checked out": "Checked Out",
+    "cancelled": "Cancelled",
+    "canceled": "Cancelled",
+}
+
+
+def normalize_booking_status(status_value: Optional[str]) -> Optional[str]:
+    if not status_value:
+        return None
+    normalized = status_value.strip()
+    if not normalized:
+        return None
+    return STATUS_ALIASES.get(normalized.lower(), normalized)
+
+
+def parse_iso_day(day_str: Optional[str]) -> Optional[datetime]:
+    if not day_str:
+        return None
+    try:
+        return datetime.strptime(day_str, "%Y-%m-%d")
+    except ValueError:
+        return None
+
+
+def calculate_nights(check_in_date: Optional[str], check_out_date: Optional[str]) -> Optional[int]:
+    check_in = parse_iso_day(check_in_date)
+    check_out = parse_iso_day(check_out_date)
+    if not check_in or not check_out:
+        return None
+    return max((check_out - check_in).days, 0)
+
 # Auth functions
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
@@ -199,6 +292,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         user = await db.users.find_one({"username": username}, {"_id": 0})
         if user is None:
             raise HTTPException(status_code=401, detail="User not found")
+        user["permissions"] = normalize_permissions(user.get("permissions"), user.get("role"))
         if isinstance(user.get('created_at'), str):
             user['created_at'] = datetime.fromisoformat(user['created_at'])
         return User(**user)
@@ -221,6 +315,7 @@ async def initialize_demo_data():
             "username": "admin",
             "password": get_password_hash("admin123"),
             "role": "admin",
+            "permissions": get_default_permissions_for_role("admin"),
             "created_at": datetime.now(timezone.utc).isoformat()
         }
         reception_user = {
@@ -228,6 +323,7 @@ async def initialize_demo_data():
             "username": "reception",
             "password": get_password_hash("reception123"),
             "role": "receptionist",
+            "permissions": get_default_permissions_for_role("receptionist"),
             "created_at": datetime.now(timezone.utc).isoformat()
         }
         await db.users.insert_many([admin_user, reception_user])
@@ -266,6 +362,7 @@ async def login(login_data: LoginRequest):
     if not user or not verify_password(login_data.password, user["password"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
+    user["permissions"] = normalize_permissions(user.get("permissions"), user.get("role"))
     if isinstance(user.get('created_at'), str):
         user['created_at'] = datetime.fromisoformat(user['created_at'])
     
@@ -284,7 +381,8 @@ async def create_user(user_data: UserCreate, current_user: User = Depends(get_ad
     if existing:
         raise HTTPException(status_code=400, detail="Username already exists")
     
-    user = User(username=user_data.username, role=user_data.role)
+    permissions = normalize_permissions(user_data.permissions, user_data.role)
+    user = User(username=user_data.username, role=user_data.role, permissions=permissions)
     doc = user.model_dump()
     doc["password"] = get_password_hash(user_data.password)
     doc["created_at"] = doc["created_at"].isoformat()
@@ -295,6 +393,7 @@ async def create_user(user_data: UserCreate, current_user: User = Depends(get_ad
 async def get_users(current_user: User = Depends(get_admin_user)):
     users = await db.users.find({}, {"_id": 0, "password": 0}).to_list(1000)
     for user in users:
+        user["permissions"] = normalize_permissions(user.get("permissions"), user.get("role"))
         if isinstance(user.get('created_at'), str):
             user['created_at'] = datetime.fromisoformat(user['created_at'])
     return users
@@ -373,7 +472,14 @@ async def mark_room_available(room_id: str, current_user: User = Depends(get_cur
 
 # Guest routes
 @api_router.get("/guests", response_model=List[Guest])
-async def get_guests(search: Optional[str] = None, current_user: User = Depends(get_current_user)):
+async def get_guests(
+    search: Optional[str] = None,
+    sort_by: Optional[str] = "created_at",
+    sort_dir: Optional[str] = "desc",
+    page: int = 1,
+    limit: int = 100,
+    current_user: User = Depends(get_current_user),
+):
     query = {}
     if search:
         query["$or"] = [
@@ -381,11 +487,155 @@ async def get_guests(search: Optional[str] = None, current_user: User = Depends(
             {"phone": {"$regex": search, "$options": "i"}},
             {"passport_id": {"$regex": search, "$options": "i"}},
         ]
-    guests = await db.guests.find(query, {"_id": 0}).to_list(1000)
+
+    allowed_sort_fields = {"created_at", "full_name", "phone", "passport_id", "id_number"}
+    actual_sort_by = sort_by if sort_by in allowed_sort_fields else "created_at"
+    sort_direction = -1 if str(sort_dir).lower() != "asc" else 1
+
+    page = max(page, 1)
+    limit = min(max(limit, 1), 1000)
+    skip = (page - 1) * limit
+
+    cursor = db.guests.find(query, {"_id": 0}).sort(actual_sort_by, sort_direction).skip(skip).limit(limit)
+    guests = await cursor.to_list(limit)
     for guest in guests:
         if isinstance(guest.get('created_at'), str):
             guest['created_at'] = datetime.fromisoformat(guest['created_at'])
     return guests
+
+
+@api_router.get("/guests/archive")
+async def get_guests_archive(
+    q: Optional[str] = None,
+    guest_id: Optional[str] = None,
+    status: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    sort_by: str = "check_in_date",
+    sort_dir: str = "desc",
+    page: int = 1,
+    limit: int = 200,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Mehmonlar arxivi: har bir bron yozuvi guest bo'yicha flatten qilinadi.
+    """
+    page = max(page, 1)
+    limit = min(max(limit, 1), 1000)
+
+    booking_query = {}
+    normalized_status = normalize_booking_status(status)
+    if normalized_status and normalized_status.lower() != "all":
+        booking_query["status"] = normalized_status
+
+    if date_from and date_to:
+        booking_query["check_in_date"] = {"$gte": date_from, "$lte": date_to}
+    elif date_from:
+        booking_query["check_in_date"] = {"$gte": date_from}
+    elif date_to:
+        booking_query["check_in_date"] = {"$lte": date_to}
+
+    if guest_id:
+        booking_query["guest_ids"] = guest_id
+
+    bookings = await db.bookings.find(booking_query, {"_id": 0}).to_list(10000)
+
+    room_ids = {b.get("room_id") for b in bookings if b.get("room_id")}
+    guest_ids = set()
+    for booking in bookings:
+        for gid in booking.get("guest_ids", []):
+            if gid:
+                guest_ids.add(gid)
+
+    rooms = await db.rooms.find({"id": {"$in": list(room_ids)}} if room_ids else {}, {"_id": 0, "id": 1, "room_number": 1}).to_list(5000)
+    guests = await db.guests.find({"id": {"$in": list(guest_ids)}} if guest_ids else {}, {"_id": 0, "id": 1, "full_name": 1, "phone": 1, "passport_id": 1, "id_number": 1}).to_list(5000)
+    room_map = {r["id"]: r for r in rooms}
+    guest_map = {g["id"]: g for g in guests}
+
+    items = []
+    q_lower = q.strip().lower() if q else None
+    for booking in bookings:
+        booking_guest_ids = booking.get("guest_ids") or []
+        if not booking_guest_ids:
+            continue
+
+        room = room_map.get(booking.get("room_id"), {})
+        room_number = room.get("room_number", "Unknown")
+        nights = calculate_nights(booking.get("check_in_date"), booking.get("check_out_date"))
+        total_price = float(booking.get("total_price", 0) or 0)
+        share_price = total_price / len(booking_guest_ids) if booking_guest_ids else total_price
+
+        for gid in booking_guest_ids:
+            if guest_id and gid != guest_id:
+                continue
+
+            guest_doc = guest_map.get(gid, {})
+            item = {
+                "booking_id": booking.get("id"),
+                "guest_id": gid,
+                "guest_name": guest_doc.get("full_name", "Unknown"),
+                "guest_phone": guest_doc.get("phone"),
+                "guest_passport_id": guest_doc.get("passport_id") or guest_doc.get("id_number"),
+                "room_id": booking.get("room_id"),
+                "room_number": room_number,
+                "check_in_date": booking.get("check_in_date"),
+                "check_out_date": booking.get("check_out_date"),
+                "nights": nights,
+                "status": booking.get("status"),
+                "total_price": total_price,
+                "guest_share_price": share_price,
+                "checked_in_at": booking.get("checked_in_at"),
+                "checked_out_at": booking.get("checked_out_at"),
+                "created_at": booking.get("created_at"),
+            }
+
+            if q_lower:
+                haystack = " ".join([
+                    str(item.get("guest_name", "")),
+                    str(item.get("guest_phone", "")),
+                    str(item.get("room_number", "")),
+                    str(item.get("status", "")),
+                    str(item.get("check_in_date", "")),
+                    str(item.get("check_out_date", "")),
+                ]).lower()
+                if q_lower not in haystack:
+                    continue
+
+            items.append(item)
+
+    sort_key_map = {
+        "check_in_date": "check_in_date",
+        "check_out_date": "check_out_date",
+        "created_at": "created_at",
+        "total_amount": "total_price",
+        "total_price": "total_price",
+        "summa": "total_price",
+        "nights": "nights",
+        "room_number": "room_number",
+        "guest_name": "guest_name",
+        "status": "status",
+    }
+    actual_sort_key = sort_key_map.get(sort_by, "check_in_date")
+    reverse = str(sort_dir).lower() != "asc"
+
+    def sort_value(x):
+        val = x.get(actual_sort_key)
+        if val is None:
+            return ""
+        return val
+
+    items.sort(key=sort_value, reverse=reverse)
+
+    total = len(items)
+    start = (page - 1) * limit
+    end = start + limit
+
+    return {
+        "items": items[start:end],
+        "total": total,
+        "page": page,
+        "limit": limit,
+    }
 
 @api_router.get("/guests/{guest_id}", response_model=Guest)
 async def get_guest(guest_id: str, current_user: User = Depends(get_current_user)):
@@ -396,6 +646,41 @@ async def get_guest(guest_id: str, current_user: User = Depends(get_current_user
         guest['created_at'] = datetime.fromisoformat(guest['created_at'])
     return Guest(**guest)
 
+
+@api_router.get("/guests/{guest_id}/history")
+async def get_guest_history(
+    guest_id: str,
+    q: Optional[str] = None,
+    status: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    sort_by: str = "check_in_date",
+    sort_dir: str = "desc",
+    page: int = 1,
+    limit: int = 200,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Bitta mehmonning bron tarixi.
+    """
+    guest = await db.guests.find_one({"id": guest_id}, {"_id": 0, "id": 1})
+    if not guest:
+        raise HTTPException(status_code=404, detail="Guest not found")
+
+    archive = await get_guests_archive(
+        q=q,
+        guest_id=guest_id,
+        status=status,
+        date_from=date_from,
+        date_to=date_to,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
+        page=page,
+        limit=limit,
+        current_user=current_user,
+    )
+    return archive
+
 @api_router.post("/guests", response_model=Guest)
 async def create_guest(guest_data: GuestCreate, current_user: User = Depends(get_current_user)):
     guest = Guest(**guest_data.model_dump())
@@ -403,51 +688,6 @@ async def create_guest(guest_data: GuestCreate, current_user: User = Depends(get
     doc["created_at"] = doc["created_at"].isoformat()
     await db.guests.insert_one(doc)
     return guest
-
-@api_router.get("/guests/{guest_id}/history")
-async def get_guest_history(guest_id: str, current_user: User = Depends(get_current_user)):
-    """
-    Mehmonning barcha bronlari tarixi
-    """
-    guest = await db.guests.find_one({"id": guest_id}, {"_id": 0})
-    if not guest:
-        raise HTTPException(status_code=404, detail="Guest not found")
-
-    bookings = await db.bookings.find(
-        {"guest_ids": {"$in": [guest_id]}},
-        {"_id": 0}
-    ).to_list(1000)
-
-    history = []
-    for booking in bookings:
-        room = await db.rooms.find_one({"id": booking["room_id"]}, {"_id": 0})
-        room_number = room["room_number"] if room else "Unknown"
-
-        try:
-            check_in = datetime.strptime(booking["check_in_date"], "%Y-%m-%d")
-            check_out = datetime.strptime(booking["check_out_date"], "%Y-%m-%d")
-            nights = (check_out - check_in).days
-        except Exception:
-            nights = None
-
-        history.append({
-            "id": booking["id"],
-            "room_number": room_number,
-            "room_id": booking["room_id"],
-            "check_in_date": booking["check_in_date"],
-            "check_out_date": booking["check_out_date"],
-            "nights": nights,
-            "total_price": booking["total_price"],
-            "status": booking["status"],
-            "checked_in_at": booking.get("checked_in_at"),
-            "checked_out_at": booking.get("checked_out_at"),
-            "created_at": booking.get("created_at"),
-        })
-
-    # Sort by check_in_date descending
-    history.sort(key=lambda x: x["check_in_date"] or "", reverse=True)
-
-    return history
 
 @api_router.put("/guests/{guest_id}", response_model=Guest)
 async def update_guest(guest_id: str, guest_data: GuestUpdate, current_user: User = Depends(get_current_user)):
@@ -466,11 +706,39 @@ async def update_guest(guest_id: str, guest_data: GuestUpdate, current_user: Use
 
 # Booking routes - YANGILANGAN (Ko'p mehmonlar)
 @api_router.get("/bookings", response_model=List[Booking])
-async def get_bookings(status: Optional[str] = None, current_user: User = Depends(get_current_user)):
+async def get_bookings(
+    status: Optional[str] = None,
+    sort_by: Optional[str] = "created_at",
+    sort_dir: Optional[str] = "desc",
+    page: int = 1,
+    limit: int = 200,
+    current_user: User = Depends(get_current_user)
+):
     query = {}
     if status:
         query["status"] = status
-    bookings = await db.bookings.find(query, {"_id": 0}).to_list(1000)
+
+    allowed_sort_fields = {
+        "created_at",
+        "check_in_date",
+        "check_out_date",
+        "total_price",
+        "status",
+    }
+    actual_sort_by = sort_by if sort_by in allowed_sort_fields else "created_at"
+    sort_direction = -1 if str(sort_dir).lower() != "asc" else 1
+
+    page = max(page, 1)
+    limit = min(max(limit, 1), 1000)
+    skip = (page - 1) * limit
+
+    cursor = (
+        db.bookings.find(query, {"_id": 0})
+        .sort(actual_sort_by, sort_direction)
+        .skip(skip)
+        .limit(limit)
+    )
+    bookings = await cursor.to_list(limit)
     for booking in bookings:
         if isinstance(booking.get('created_at'), str):
             booking['created_at'] = datetime.fromisoformat(booking['created_at'])
@@ -781,7 +1049,13 @@ async def get_revenue_data(year: int = datetime.now().year, current_user: User =
         })
     return monthly_data
 
-app.include_router(api_router)
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -792,3 +1066,187 @@ logger = logging.getLogger(__name__)
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
+
+
+# ============== YANGI: Chiqimlar (Expenses) Routes ==============
+
+@api_router.get("/expenses")
+async def get_expenses(
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    category: Optional[str] = None,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Barcha chiqimlarni olish (filter bilan)
+    """
+    query = {}
+    
+    if category and category != "all":
+        query["category"] = category
+    
+    if date_from and date_to:
+        query["date"] = {"$gte": date_from, "$lte": date_to}
+    elif date_from:
+        query["date"] = {"$gte": date_from}
+    elif date_to:
+        query["date"] = {"$lte": date_to}
+    
+    expenses = await db.expenses.find(query, {"_id": 0}).sort("date", -1).to_list(5000)
+    
+    for expense in expenses:
+        if isinstance(expense.get('created_at'), str):
+            expense['created_at'] = datetime.fromisoformat(expense['created_at'])
+    
+    return expenses
+
+@api_router.get("/expenses/{expense_id}")
+async def get_expense(expense_id: str, current_user: User = Depends(get_current_user)):
+    expense = await db.expenses.find_one({"id": expense_id}, {"_id": 0})
+    if not expense:
+        raise HTTPException(status_code=404, detail="Expense not found")
+    if isinstance(expense.get('created_at'), str):
+        expense['created_at'] = datetime.fromisoformat(expense['created_at'])
+    return expense
+
+@api_router.post("/expenses", response_model=Expense)
+async def create_expense(
+    expense_data: ExpenseCreate, 
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Yangi chiqim qo'shish
+    """
+    expense_date = expense_data.date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    
+    expense = Expense(
+        title=expense_data.title,
+        category=expense_data.category,
+        amount=expense_data.amount,
+        description=expense_data.description or "",
+        date=expense_date,
+        created_by=current_user.username
+    )
+    
+    doc = expense.model_dump()
+    doc["created_at"] = doc["created_at"].isoformat()
+    await db.expenses.insert_one(doc)
+    
+    # Return the Pydantic model (without MongoDB's _id/ObjectId) to avoid JSON serialization errors.
+    return expense
+
+@api_router.put("/expenses/{expense_id}")
+async def update_expense(
+    expense_id: str, 
+    expense_data: ExpenseUpdate, 
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Chiqimni tahrirlash
+    """
+    update_data = {k: v for k, v in expense_data.model_dump().items() if v is not None}
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No data to update")
+    
+    result = await db.expenses.update_one({"id": expense_id}, {"$set": update_data})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Expense not found")
+    
+    expense = await db.expenses.find_one({"id": expense_id}, {"_id": 0})
+    if isinstance(expense.get('created_at'), str):
+        expense['created_at'] = datetime.fromisoformat(expense['created_at'])
+    return expense
+
+@api_router.delete("/expenses/{expense_id}")
+async def delete_expense(expense_id: str, current_user: User = Depends(get_current_user)):
+    """
+    Chiqimni o'chirish
+    """
+    result = await db.expenses.delete_one({"id": expense_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Expense not found")
+    return {"message": "Expense deleted successfully"}
+
+@api_router.get("/expenses/summary/stats")
+async def get_expense_summary(
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Chiqimlar va daromadlar umumiy statistikasi
+    """
+    expense_query = {}
+    booking_query = {}
+    
+    if date_from and date_to:
+        expense_query["date"] = {"$gte": date_from, "$lte": date_to}
+        booking_query["checked_in_at"] = {"$gte": date_from, "$lte": date_to}
+    elif date_from:
+        expense_query["date"] = {"$gte": date_from}
+        booking_query["checked_in_at"] = {"$gte": date_from}
+    elif date_to:
+        expense_query["date"] = {"$lte": date_to}
+        booking_query["checked_in_at"] = {"$lte": date_to}
+    
+    # Chiqimlar
+    expenses = await db.expenses.find(expense_query, {"_id": 0}).to_list(5000)
+    total_expenses = sum(e["amount"] for e in expenses)
+    
+    # Kategoriya bo'yicha
+    expenses_by_category = {}
+    for e in expenses:
+        cat = e.get("category", "Boshqa")
+        expenses_by_category[cat] = expenses_by_category.get(cat, 0) + e["amount"]
+    
+    # Daromad
+    bookings = await db.bookings.find(booking_query, {"_id": 0}).to_list(5000)
+    total_income = sum(b["total_price"] for b in bookings)
+    
+    net_profit = total_income - total_expenses
+    
+    return {
+        "total_expenses": total_expenses,
+        "total_income": total_income,
+        "net_profit": net_profit,
+        "expenses_by_category": expenses_by_category,
+        "expense_count": len(expenses)
+    }
+
+@api_router.get("/expenses/monthly/chart")
+async def get_expenses_monthly_chart(
+    year: int = datetime.now().year,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Oylik chiqimlar va daromadlar grafik uchun
+    """
+    monthly_data = []
+    for month in range(1, 13):
+        month_str = f"{year}-{month:02d}"
+        
+        # Chiqimlar
+        expenses = await db.expenses.find(
+            {"date": {"$regex": f"^{month_str}"}},
+            {"_id": 0}
+        ).to_list(5000)
+        total_expenses = sum(e["amount"] for e in expenses)
+        
+        # Daromad
+        bookings = await db.bookings.find(
+            {"checked_in_at": {"$regex": f"^{month_str}"}},
+            {"_id": 0}
+        ).to_list(5000)
+        total_income = sum(b["total_price"] for b in bookings)
+        
+        monthly_data.append({
+            "month": datetime(year, month, 1).strftime("%B"),
+            "month_num": month,
+            "income": total_income,
+            "expenses": total_expenses,
+            "profit": total_income - total_expenses
+        })
+    
+    return monthly_data 
+
+app.include_router(api_router)

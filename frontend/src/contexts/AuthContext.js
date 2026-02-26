@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import api from '@/utils/api';
+import { firstAllowedPath, normalizePermissions, userHasPermission } from '@/lib/permissions';
 
 const AuthContext = createContext();
 
@@ -18,6 +19,14 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [loading, setLoading] = useState(true);
 
+  const normalizeUser = (rawUser) => {
+    if (!rawUser) return null;
+    return {
+      ...rawUser,
+      permissions: normalizePermissions(rawUser.permissions, rawUser.role),
+    };
+  };
+
   useEffect(() => {
     if (token) {
       // token avtomatik api.js orqali qo‘shiladi
@@ -30,7 +39,7 @@ export const AuthProvider = ({ children }) => {
   const fetchCurrentUser = async () => {
     try {
       const response = await api.get(`${API}/auth/me`);
-      setUser(response.data);
+      setUser(normalizeUser(response.data));
     } catch (error) {
       console.error('Failed to fetch user:', error);
       logout();
@@ -44,7 +53,7 @@ export const AuthProvider = ({ children }) => {
     const { token, user } = response.data;
     localStorage.setItem('token', token);
     setToken(token);
-    setUser(user);
+    setUser(normalizeUser(user));
     // token avtomatik api.js orqali qo‘shiladi
     return user;
   };
@@ -57,7 +66,17 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, loading }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        token,
+        login,
+        logout,
+        loading,
+        hasPermission: (permissionKey) => userHasPermission(user, permissionKey),
+        firstAllowedPath: () => firstAllowedPath(user),
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

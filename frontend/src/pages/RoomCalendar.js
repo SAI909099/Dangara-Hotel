@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
 const API_URL = process.env.REACT_APP_API_URL || '/api';
+const GUEST_SELECTOR_LIMIT = 200;
 
 const RoomCalendar = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -80,16 +81,26 @@ const RoomCalendar = () => {
       const [roomsRes, bookingsRes, guestsRes] = await Promise.all([
         fetch(`${API_URL}/rooms`, { headers }),
         fetch(`${API_URL}/bookings`, { headers }),
-        fetch(`${API_URL}/guests`, { headers })
+        fetch(
+          `${API_URL}/guests?sort_by=created_at&sort_dir=desc&page=1&limit=${GUEST_SELECTOR_LIMIT}`,
+          { headers }
+        )
       ]);
 
       const roomsData = await roomsRes.json();
       const bookingsData = await bookingsRes.json();
       const guestsData = await guestsRes.json();
+      const sortedGuests = Array.isArray(guestsData)
+        ? [...guestsData].sort((a, b) => {
+            const aTime = new Date(a?.created_at || 0).getTime();
+            const bTime = new Date(b?.created_at || 0).getTime();
+            return (Number.isNaN(bTime) ? 0 : bTime) - (Number.isNaN(aTime) ? 0 : aTime);
+          })
+        : [];
 
       setRooms(roomsData);
       setBookings(bookingsData);
-      setGuests(guestsData);
+      setGuests(sortedGuests);
       setLoading(false);
     } catch (error) {
       console.error('Ma\'lumotlarni yuklashda xatolik:', error);

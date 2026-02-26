@@ -309,7 +309,7 @@ export default function Guests() {
     sort_by: "created_at",
     sort_dir: "desc",
     page: 1,
-    limit: 20,
+    limit: 50,
   });
 
   const [total, setTotal] = useState(null);
@@ -344,10 +344,10 @@ export default function Guests() {
         });
       }
 
-      // Backend pagination qaytarmaydi — shuning uchun best-effort
-      // (xohlasangiz bu yerda client-side paginate qilamiz)
       setGuests(mapped);
-      setTotal(null);
+      // Backend hozircha List qaytaradi; total aniq emas.
+      // Best-effort: joriy sahifada limitga teng bo'lsa keyingi sahifa bo'lishi mumkin.
+      setTotal(mapped.length < filters.limit ? ((filters.page - 1) * filters.limit) + mapped.length : null);
     } catch (e) {
       toast.error("Mehmonlar roʻyxatini yuklab bo‘lmadi");
       setGuests([]);
@@ -469,6 +469,10 @@ export default function Guests() {
           <Button variant="outline" onClick={handlePrint} className="border-slate-200 hover:bg-slate-50">
             <Printer className="w-4 h-4 mr-2" />
             Chop etish
+          </Button>
+          <Button variant="outline" onClick={() => navigate("/guests/archive")} className="border-slate-200 hover:bg-slate-50">
+            <History className="w-4 h-4 mr-2" />
+            Arxiv
           </Button>
           <Button onClick={() => navigate("/guests/new")} className="bg-[#1e1b4b] hover:bg-[#312e81] text-white">
             <Plus className="w-4 h-4 mr-2" />

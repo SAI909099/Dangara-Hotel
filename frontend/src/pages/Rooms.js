@@ -8,8 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner';
 import { Plus, Edit2, Trash2, Filter, Sparkles, CheckCircle } from 'lucide-react';
 
-const API_URL = process.env.REACT_APP_API_URL || '/api';
-
+// ✅ TO'G'RILANDI - http://localhost:8000/api
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
 const Rooms = () => {
   const { user } = useAuth();

@@ -3,8 +3,10 @@ import api from '@/utils/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { PAGE_PERMISSION_OPTIONS, ROLE_DEFAULT_PERMISSIONS, normalizePermissions } from '@/lib/permissions';
 import { toast } from 'sonner';
 import { Plus, UserCog } from 'lucide-react';
 
@@ -16,7 +18,8 @@ const Users = () => {
   const [formData, setFormData] = useState({
     username: '',
     password: '',
-    role: 'receptionist'
+    role: 'receptionist',
+    permissions: ROLE_DEFAULT_PERMISSIONS.receptionist,
   });
 
   useEffect(() => {
@@ -35,7 +38,11 @@ const Users = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await api.post(`${API}/users`, formData);
+      const payload = {
+        ...formData,
+        permissions: normalizePermissions(formData.permissions, formData.role),
+      };
+      await api.post(`${API}/users`, payload);
       toast.success('Foydalanuvchi yaratildi');
       fetchUsers();
       resetForm();
@@ -49,14 +56,35 @@ const Users = () => {
     setFormData({
       username: '',
       password: '',
-      role: 'receptionist'
+      role: 'receptionist',
+      permissions: ROLE_DEFAULT_PERMISSIONS.receptionist,
+    });
+  };
+
+  const handleRoleChange = (role) => {
+    setFormData((prev) => ({
+      ...prev,
+      role,
+      permissions: normalizePermissions(ROLE_DEFAULT_PERMISSIONS[role] || ['dashboard'], role),
+    }));
+  };
+
+  const togglePermission = (permissionKey, checked) => {
+    setFormData((prev) => {
+      const next = checked
+        ? [...(prev.permissions || []), permissionKey]
+        : (prev.permissions || []).filter((p) => p !== permissionKey);
+      return {
+        ...prev,
+        permissions: normalizePermissions(next, prev.role),
+      };
     });
   };
 
   const getRolBadge = (role) => {
-    return role === 'admin' 
-      ? 'bg-[#1e1b4b] text-white ring-[#1e1b4b]/20'
-      : 'bg-blue-50 text-blue-700 ring-blue-600/20';
+    if (role === 'admin') return 'bg-[#1e1b4b] text-white ring-[#1e1b4b]/20';
+    if (role === 'accountant') return 'bg-emerald-50 text-emerald-700 ring-emerald-600/20';
+    return 'bg-blue-50 text-blue-700 ring-blue-600/20';
   };
 
   return (
@@ -106,15 +134,44 @@ const Users = () => {
               </div>
               <div>
                 <Label htmlFor="role">Rol</Label>
-                <Select value={formData.role} onValueChange={(value) => setFormData({ ...formData, role: value })}>
+                <Select value={formData.role} onValueChange={handleRoleChange}>
                   <SelectTrigger data-testid="user-role-select" className="mt-2">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="admin">Admin</SelectItem>
                     <SelectItem value="receptionist">Resepsion</SelectItem>
+                    <SelectItem value="accountant">Hisobchi (Accountant)</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+              <div>
+                <Label>Ruxsatlar (Pages)</Label>
+                <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-lg border border-slate-200 p-3">
+                  {PAGE_PERMISSION_OPTIONS.map((perm) => {
+                    const checked = normalizePermissions(formData.permissions, formData.role).includes(perm.key);
+                    const locked = formData.role === 'admin';
+                    return (
+                      <label
+                        key={perm.key}
+                        className={`flex items-center gap-3 rounded-md px-2 py-2 ${locked ? 'bg-slate-50' : 'hover:bg-slate-50 cursor-pointer'}`}
+                      >
+                        <Checkbox
+                          checked={checked}
+                          disabled={locked || perm.key === 'users'}
+                          onCheckedChange={(value) => togglePermission(perm.key, Boolean(value))}
+                        />
+                        <div className="flex flex-col">
+                          <span className="text-sm font-medium text-slate-800">{perm.label}</span>
+                          <span className="text-xs text-slate-500">{perm.path}</span>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+                <p className="mt-2 text-xs text-slate-500">
+                  `Users` sahifasi faqat admin uchun. `Dashboard` doim yoqilgan.
+                </p>
               </div>
               <Button data-testid="submit-user-btn" type="submit" className="w-full bg-[#1e1b4b] hover:bg-[#312e81] text-white">
                 Saqlash
@@ -131,6 +188,7 @@ const Users = () => {
               <tr className="bg-slate-50">
                 <th className="text-left px-6 py-3 text-xs uppercase font-semibold tracking-wider text-slate-500">Login</th>
                 <th className="text-left px-6 py-3 text-xs uppercase font-semibold tracking-wider text-slate-500">Rol</th>
+                <th className="text-left px-6 py-3 text-xs uppercase font-semibold tracking-wider text-slate-500">Ruxsatlar</th>
                 <th className="text-left px-6 py-3 text-xs uppercase font-semibold tracking-wider text-slate-500">Yaratilgan sana</th>
               </tr>
             </thead>
@@ -150,6 +208,18 @@ const Users = () => {
                       <UserCog className="w-3 h-3 mr-1" />
                       {user.role}
                     </span>
+                  </td>
+                  <td className="px-6 py-4 text-sm text-slate-700">
+                    <div className="flex flex-wrap gap-1.5 max-w-md">
+                      {normalizePermissions(user.permissions, user.role).map((perm) => (
+                        <span
+                          key={`${user.id}-${perm}`}
+                          className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700"
+                        >
+                          {PAGE_PERMISSION_OPTIONS.find((p) => p.key === perm)?.label || perm}
+                        </span>
+                      ))}
+                    </div>
                   </td>
                   <td className="px-6 py-4 text-sm text-slate-700">
                     {new Date(user.created_at).toLocaleDateString('uz-UZ')}

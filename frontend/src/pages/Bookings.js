@@ -9,6 +9,8 @@ import { toast } from 'sonner';
 import { Calendar as CalendarIcon, LogOut, Plus } from 'lucide-react';
 
 const API = '';
+const BOOKINGS_LIST_LIMIT = 200;
+const BOOKING_GUEST_SELECTOR_LIMIT = 200;
 
 const Bronlar = () => {
   const [bookings, setBronlar] = useState([]);
@@ -30,13 +32,44 @@ const Bronlar = () => {
   const fetchData = async () => {
     try {
       const [bookingsRes, roomsRes, guestsRes] = await Promise.all([
-        api.get(`${API}/bookings`),
+        api.get(`${API}/bookings`, {
+          params: {
+            sort_by: 'created_at',
+            sort_dir: 'desc',
+            page: 1,
+            limit: BOOKINGS_LIST_LIMIT,
+          },
+        }),
         api.get(`${API}/rooms`),
-        api.get(`${API}/guests`)
+        api.get(`${API}/guests`, {
+          params: {
+            sort_by: 'created_at',
+            sort_dir: 'desc',
+            page: 1,
+            limit: BOOKING_GUEST_SELECTOR_LIMIT,
+          },
+        })
       ]);
-      setBronlar(bookingsRes.data);
+
+      const bookingsData = Array.isArray(bookingsRes.data) ? [...bookingsRes.data] : [];
+      const guestsData = Array.isArray(guestsRes.data) ? [...guestsRes.data] : [];
+
+      // Fallback client-side sort so UI still behaves correctly if backend is not restarted yet.
+      bookingsData.sort((a, b) => {
+        const aTime = new Date(a?.created_at || a?.check_in_date || 0).getTime();
+        const bTime = new Date(b?.created_at || b?.check_in_date || 0).getTime();
+        return (Number.isNaN(bTime) ? 0 : bTime) - (Number.isNaN(aTime) ? 0 : aTime);
+      });
+
+      guestsData.sort((a, b) => {
+        const aTime = new Date(a?.created_at || 0).getTime();
+        const bTime = new Date(b?.created_at || 0).getTime();
+        return (Number.isNaN(bTime) ? 0 : bTime) - (Number.isNaN(aTime) ? 0 : aTime);
+      });
+
+      setBronlar(bookingsData);
       setXonas(roomsRes.data);
-      setMehmons(guestsRes.data);
+      setMehmons(guestsData);
     } catch (error) {
       toast.error('Ma`lumotlarni yuklab bo‘lmadi');
     }

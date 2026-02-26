@@ -10,14 +10,15 @@ import Guests from '@/pages/Guests';
 import GuestCreate from '@/pages/GuestCreate';
 import GuestDetail from '@/pages/GuestDetail';
 import GuestHistory from '@/pages/GuestHistory';
+import GuestsArchive from '@/pages/GuestsArchive';
 import Bookings from '@/pages/Bookings';
 import Reports from '@/pages/Reports';
 import Users from '@/pages/Users';
 import RoomCalendar from '@/pages/RoomCalendar';
 import '@/App.css';
 
-const ProtectedRoute = ({ children, adminOnly = false }) => {
-  const { user, loading } = useAuth();
+const ProtectedRoute = ({ children, adminOnly = false, requiredPermission = null }) => {
+  const { user, loading, hasPermission, firstAllowedPath } = useAuth();
 
   if (loading) {
     return <div className="flex items-center justify-center h-screen">Loading...</div>;
@@ -28,7 +29,11 @@ const ProtectedRoute = ({ children, adminOnly = false }) => {
   }
 
   if (adminOnly && user.role !== 'admin') {
-    return <Navigate to="/" replace />;
+    return <Navigate to={firstAllowedPath()} replace />;
+  }
+
+  if (requiredPermission && !hasPermission(requiredPermission)) {
+    return <Navigate to={firstAllowedPath()} replace />;
   }
 
   return children;
@@ -40,7 +45,7 @@ function AppRoutes() {
       <Route path="/login" element={<Login />} />
 
       <Route path="/" element={
-        <ProtectedRoute>
+        <ProtectedRoute requiredPermission="dashboard">
           <Layout>
             <Dashboard />
           </Layout>
@@ -48,7 +53,7 @@ function AppRoutes() {
       } />
 
       <Route path="/rooms" element={
-        <ProtectedRoute>
+        <ProtectedRoute requiredPermission="rooms">
           <Layout>
             <Rooms />
           </Layout>
@@ -56,16 +61,24 @@ function AppRoutes() {
       } />
 
       <Route path="/guests" element={
-        <ProtectedRoute>
+        <ProtectedRoute requiredPermission="guests">
           <Layout>
             <Guests />
           </Layout>
         </ProtectedRoute>
       } />
 
+      <Route path="/guests/archive" element={
+        <ProtectedRoute requiredPermission="guests">
+          <Layout>
+            <GuestsArchive />
+          </Layout>
+        </ProtectedRoute>
+      } />
+
       {/* Yangi mehmon qo'shish sahifasi */}
       <Route path="/guests/new" element={
-        <ProtectedRoute>
+        <ProtectedRoute requiredPermission="guests">
           <Layout>
             <GuestCreate />
           </Layout>
@@ -74,7 +87,7 @@ function AppRoutes() {
 
       {/* Mehmon tafsilotlari */}
       <Route path="/guests/:guestId" element={
-        <ProtectedRoute>
+        <ProtectedRoute requiredPermission="guests">
           <Layout>
             <GuestDetail />
           </Layout>
@@ -83,7 +96,7 @@ function AppRoutes() {
 
       {/* Mehmon tarixi */}
       <Route path="/guests/:guestId/history" element={
-        <ProtectedRoute>
+        <ProtectedRoute requiredPermission="guests">
           <Layout>
             <GuestHistory />
           </Layout>
@@ -91,7 +104,7 @@ function AppRoutes() {
       } />
 
       <Route path="/bookings" element={
-        <ProtectedRoute>
+        <ProtectedRoute requiredPermission="bookings">
           <Layout>
             <Bookings />
           </Layout>
@@ -99,7 +112,7 @@ function AppRoutes() {
       } />
 
       <Route path="/calendar" element={
-        <ProtectedRoute>
+        <ProtectedRoute requiredPermission="calendar">
           <Layout>
             <RoomCalendar />
           </Layout>
@@ -107,7 +120,7 @@ function AppRoutes() {
       } />
 
       <Route path="/reports" element={
-        <ProtectedRoute>
+        <ProtectedRoute requiredPermission="reports">
           <Layout>
             <Reports />
           </Layout>
@@ -115,7 +128,7 @@ function AppRoutes() {
       } />
 
       <Route path="/users" element={
-        <ProtectedRoute adminOnly>
+        <ProtectedRoute adminOnly requiredPermission="users">
           <Layout>
             <Users />
           </Layout>
